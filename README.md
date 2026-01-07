@@ -31,7 +31,7 @@ Fork this repository and builds run automatically on push. Download artifacts fr
 
 | Script | Purpose |
 |--------|---------|
-| `scripts\setup-environment.bat` | Install dependencies (Chocolatey, Python, meson, ninja, winflexbison) |
+| `scripts\setup-environment.bat` | Install dependencies (Chocolatey, Python, meson, ninja, winflexbison, WDK) |
 | `scripts\build.bat` | Full build (Mesa + driver) |
 | `scripts\build-mesa-only.bat` | Build only Mesa virgl |
 | `scripts\build-driver-only.bat` | Build only viogpu3d driver (requires Mesa built first) |
@@ -40,6 +40,7 @@ Fork this repository and builds run automatically on push. Download artifacts fr
 
 - Windows 10/11
 - Visual Studio with C++ build tools
+- Windows Driver Kit (WDK) - required for `d3d10umddi.h` header
 - Run setup script as Administrator for initial setup
 - Run build scripts from "Developer Command Prompt for VS" or "x64 Native Tools Command Prompt"
 

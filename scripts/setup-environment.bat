@@ -40,32 +40,42 @@ if %errorLevel% neq 0 (
 )
 
 echo.
-echo [1/5] Installing Python...
+echo [1/6] Installing Python...
 choco install python311 -y
 if %errorLevel% neq 0 (
     echo WARNING: Python installation may have issues
 )
 
 echo.
-echo [2/5] Installing Git...
+echo [2/6] Installing Git...
 choco install git -y
 if %errorLevel% neq 0 (
     echo WARNING: Git installation may have issues
 )
 
 echo.
-echo [3/5] Installing winflexbison...
+echo [3/6] Installing winflexbison...
 choco install winflexbison3 -y
 if %errorLevel% neq 0 (
     echo WARNING: winflexbison installation may have issues
 )
 
 echo.
-echo [4/5] Refreshing environment...
+echo [4/6] Installing Windows Driver Kit (WDK)...
+echo This is required for d3d10umddi.h header used by Mesa D3D10 UMD
+choco install windowsdriverkit11 -y
+if %errorLevel% neq 0 (
+    echo WARNING: WDK installation may have issues
+    echo You may need to install WDK manually from:
+    echo   https://learn.microsoft.com/en-us/windows-hardware/drivers/download-the-wdk
+)
+
+echo.
+echo [5/6] Refreshing environment...
 call refreshenv
 
 echo.
-echo [5/5] Installing Python packages (meson, ninja, mako, pyyaml)...
+echo [6/6] Installing Python packages (meson, ninja, mako, pyyaml)...
 pip install meson ninja mako pyyaml
 if %errorLevel% neq 0 (
     echo ERROR: Failed to install Python packages

@@ -50,6 +50,21 @@ jobs:
           # Add to PATH - winflexbison installs to chocolatey bin
           echo "C:\ProgramData\chocolatey\bin" >> $env:GITHUB_PATH
 
+      - name: Install Windows Driver Kit (WDK)
+        run: |
+          # Install WDK for d3d10umddi.h header required by Mesa D3D10 UMD
+          choco install windowsdriverkit11 -y
+
+          # Find WDK include path and add to environment
+          $wdkPath = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include" -Directory |
+                     Sort-Object Name -Descending |
+                     Select-Object -First 1
+          if ($wdkPath) {
+            $wdkInclude = "$($wdkPath.FullName)\um"
+            echo "WDK Include path: $wdkInclude"
+            echo "INCLUDE=$wdkInclude;$env:INCLUDE" >> $env:GITHUB_ENV
+          }
+
       - name: Create working directories
         run: |
           mkdir mesa_prefix
