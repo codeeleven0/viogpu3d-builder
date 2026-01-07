@@ -14,13 +14,13 @@ on:
       driver_branch:
         description: 'KVM guest drivers branch'
         required: false
-        default: 'viogpu_win'
+        default: 'viogpu3d'
 
 env:
   MESA_REPO: https://gitlab.freedesktop.org/max8rr8/mesa
   MESA_BRANCH: ${{ github.event.inputs.mesa_branch || 'viogpu_win' }}
   DRIVER_REPO: https://github.com/max8rr8/kvm-guest-drivers-windows
-  DRIVER_BRANCH: ${{ github.event.inputs.driver_branch || 'viogpu_win' }}
+  DRIVER_BRANCH: ${{ github.event.inputs.driver_branch || 'viogpu3d' }}
 
 jobs:
   build:
