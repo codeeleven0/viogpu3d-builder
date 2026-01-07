@@ -52,37 +52,48 @@ jobs:
 
       - name: Install Windows SDK with WDK headers
         run: |
-          # The d3d10umddi.h header is in the Windows SDK "um" folder
-          # Check if it exists in the pre-installed SDK
+          # The d3d10umddi.h is in "um" folder, d3dkmddi.h is in "km" folder
+          # We need both for Mesa D3D10 UMD build
           $sdkInclude = "C:\Program Files (x86)\Windows Kits\10\Include"
           $sdkVersions = Get-ChildItem $sdkInclude -Directory | Sort-Object Name -Descending
 
           foreach ($ver in $sdkVersions) {
             $umPath = Join-Path $ver.FullName "um"
-            $headerPath = Join-Path $umPath "d3d10umddi.h"
-            if (Test-Path $headerPath) {
+            $kmPath = Join-Path $ver.FullName "km"
+            $sharedPath = Join-Path $ver.FullName "shared"
+            $umHeader = Join-Path $umPath "d3d10umddi.h"
+            $kmHeader = Join-Path $kmPath "d3dkmddi.h"
+
+            if ((Test-Path $umHeader) -and (Test-Path $kmHeader)) {
               echo "Found d3d10umddi.h in: $umPath"
-              echo "WDK_INCLUDE=$umPath" >> $env:GITHUB_ENV
+              echo "Found d3dkmddi.h in: $kmPath"
+              # Include um, km, and shared paths
+              echo "WDK_INCLUDE=$umPath;$kmPath;$sharedPath" >> $env:GITHUB_ENV
               exit 0
             }
           }
 
-          echo "d3d10umddi.h not found in existing SDK, installing WDK..."
+          echo "Headers not found in existing SDK, installing WDK..."
           choco install windowsdriverkit11 -y
 
           # Re-check after WDK install
           $sdkVersions = Get-ChildItem $sdkInclude -Directory | Sort-Object Name -Descending
           foreach ($ver in $sdkVersions) {
             $umPath = Join-Path $ver.FullName "um"
-            $headerPath = Join-Path $umPath "d3d10umddi.h"
-            if (Test-Path $headerPath) {
+            $kmPath = Join-Path $ver.FullName "km"
+            $sharedPath = Join-Path $ver.FullName "shared"
+            $umHeader = Join-Path $umPath "d3d10umddi.h"
+            $kmHeader = Join-Path $kmPath "d3dkmddi.h"
+
+            if ((Test-Path $umHeader) -and (Test-Path $kmHeader)) {
               echo "Found d3d10umddi.h in: $umPath"
-              echo "WDK_INCLUDE=$umPath" >> $env:GITHUB_ENV
+              echo "Found d3dkmddi.h in: $kmPath"
+              echo "WDK_INCLUDE=$umPath;$kmPath;$sharedPath" >> $env:GITHUB_ENV
               exit 0
             }
           }
 
-          echo "ERROR: Could not find d3d10umddi.h"
+          echo "ERROR: Could not find required WDK headers"
           exit 1
 
       - name: Create working directories
