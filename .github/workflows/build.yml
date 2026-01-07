@@ -37,7 +37,7 @@ jobs:
 
       - name: Install Meson and Ninja
         run: |
-          pip install meson ninja mako
+          pip install meson ninja mako pyyaml
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1

@@ -65,8 +65,8 @@ echo [4/5] Refreshing environment...
 call refreshenv
 
 echo.
-echo [5/5] Installing Python packages (meson, ninja, mako)...
-pip install meson ninja mako
+echo [5/5] Installing Python packages (meson, ninja, mako, pyyaml)...
+pip install meson ninja mako pyyaml
 if %errorLevel% neq 0 (
     echo ERROR: Failed to install Python packages
     pause
