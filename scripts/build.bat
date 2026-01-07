@@ -68,6 +68,34 @@ if %errorLevel% neq 0 (
 echo All prerequisites found.
 echo.
 
+REM Find Windows SDK headers for d3d10umddi.h and d3dkmddi.h
+echo Searching for Windows SDK headers...
+set "SDK_FOUND=0"
+set "SDK_BASE=C:\Program Files (x86)\Windows Kits\10\Include"
+
+if exist "%SDK_BASE%" (
+    for /f "tokens=*" %%d in ('dir /b /ad /o-n "%SDK_BASE%" 2^>nul') do (
+        if "!SDK_FOUND!"=="0" (
+            set "UM_PATH=%SDK_BASE%\%%d\um"
+            set "SHARED_PATH=%SDK_BASE%\%%d\shared"
+            if exist "!UM_PATH!\d3d10umddi.h" (
+                if exist "!SHARED_PATH!\d3dkmddi.h" (
+                    echo Found d3d10umddi.h in: !UM_PATH!
+                    echo Found d3dkmddi.h in: !SHARED_PATH!
+                    set "INCLUDE=!UM_PATH!;!SHARED_PATH!;%INCLUDE%"
+                    set "SDK_FOUND=1"
+                )
+            )
+        )
+    )
+)
+
+if "!SDK_FOUND!"=="0" (
+    echo WARNING: Could not find Windows SDK headers (d3d10umddi.h, d3dkmddi.h)
+    echo Mesa D3D10 UMD build may fail. Install Windows SDK or WDK.
+)
+echo.
+
 REM Create working directory
 if not exist "%WORK_DIR%" mkdir "%WORK_DIR%"
 cd /d "%WORK_DIR%"
