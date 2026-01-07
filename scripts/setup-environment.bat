@@ -63,7 +63,7 @@ if %errorLevel% neq 0 (
 echo.
 echo [4/6] Installing Windows Driver Kit (WDK)...
 echo This is required for d3d10umddi.h header used by Mesa D3D10 UMD
-choco install windowsdriverkit11 -y
+choco install windowsdriverkit10 -y
 if %errorLevel% neq 0 (
     echo WARNING: WDK installation may have issues
     echo You may need to install WDK manually from:
