@@ -118,6 +118,10 @@ jobs:
         run: |
           git clone --branch ${{ env.DRIVER_BRANCH }} ${{ env.DRIVER_REPO }} kvm-guest-drivers-windows
 
+      - name: Patch driver source
+        run: |
+          .\scripts\patch-driver.ps1 -DriverPath kvm-guest-drivers-windows
+
       - name: Build viogpu driver
         working-directory: kvm-guest-drivers-windows/viogpu
         run: |
