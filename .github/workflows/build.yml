@@ -50,6 +50,10 @@ jobs:
           # Add to PATH - winflexbison installs to chocolatey bin
           echo "C:\ProgramData\chocolatey\bin" >> $env:GITHUB_PATH
 
+      - name: Install Windows Driver Kit (WDK)
+        run: |
+          choco install windowsdriverkit10 -y
+
       - name: Find Windows SDK headers
         run: |
           # d3d10umddi.h is in "um", it includes d3dkmddi.h which is in "shared"
