@@ -50,20 +50,40 @@ jobs:
           # Add to PATH - winflexbison installs to chocolatey bin
           echo "C:\ProgramData\chocolatey\bin" >> $env:GITHUB_PATH
 
-      - name: Install Windows Driver Kit (WDK)
+      - name: Install Windows SDK with WDK headers
         run: |
-          # Install WDK for d3d10umddi.h header required by Mesa D3D10 UMD
+          # The d3d10umddi.h header is in the Windows SDK "um" folder
+          # Check if it exists in the pre-installed SDK
+          $sdkInclude = "C:\Program Files (x86)\Windows Kits\10\Include"
+          $sdkVersions = Get-ChildItem $sdkInclude -Directory | Sort-Object Name -Descending
+
+          foreach ($ver in $sdkVersions) {
+            $umPath = Join-Path $ver.FullName "um"
+            $headerPath = Join-Path $umPath "d3d10umddi.h"
+            if (Test-Path $headerPath) {
+              echo "Found d3d10umddi.h in: $umPath"
+              echo "WDK_INCLUDE=$umPath" >> $env:GITHUB_ENV
+              exit 0
+            }
+          }
+
+          echo "d3d10umddi.h not found in existing SDK, installing WDK..."
           choco install windowsdriverkit11 -y
 
-          # Find WDK include path and add to environment
-          $wdkPath = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include" -Directory |
-                     Sort-Object Name -Descending |
-                     Select-Object -First 1
-          if ($wdkPath) {
-            $wdkInclude = "$($wdkPath.FullName)\um"
-            echo "WDK Include path: $wdkInclude"
-            echo "INCLUDE=$wdkInclude;$env:INCLUDE" >> $env:GITHUB_ENV
+          # Re-check after WDK install
+          $sdkVersions = Get-ChildItem $sdkInclude -Directory | Sort-Object Name -Descending
+          foreach ($ver in $sdkVersions) {
+            $umPath = Join-Path $ver.FullName "um"
+            $headerPath = Join-Path $umPath "d3d10umddi.h"
+            if (Test-Path $headerPath) {
+              echo "Found d3d10umddi.h in: $umPath"
+              echo "WDK_INCLUDE=$umPath" >> $env:GITHUB_ENV
+              exit 0
+            }
           }
+
+          echo "ERROR: Could not find d3d10umddi.h"
+          exit 1
 
       - name: Create working directories
         run: |
@@ -81,12 +101,19 @@ jobs:
         run: |
           mkdir build
           cd build
+
+          # Pass WDK include path to compiler
+          $wdkArg = "-I$env:WDK_INCLUDE"
+          echo "Using WDK include: $wdkArg"
+
           meson .. --prefix=$env:MESA_PREFIX `
             -Dgallium-drivers=virgl `
             -Dgallium-d3d10umd=true `
             -Dgallium-wgl-dll-name=viogpu_wgl `
             -Dgallium-d3d10-dll-name=viogpu_d3d10 `
-            -Db_vscrt=mt
+            -Db_vscrt=mt `
+            "-Dc_args=$wdkArg" `
+            "-Dcpp_args=$wdkArg"
 
       - name: Build and install Mesa
         working-directory: mesa/build
