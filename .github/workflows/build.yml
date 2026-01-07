@@ -103,8 +103,7 @@ jobs:
             -Dgallium-drivers=virgl `
             -Dgallium-d3d10umd=true `
             -Dgallium-wgl-dll-name=viogpu_wgl `
-            -Dgallium-d3d10-dll-name=viogpu_d3d10 `
-            -Db_vscrt=mt
+            -Dgallium-d3d10-dll-name=viogpu_d3d10
 
       - name: Build and install Mesa
         working-directory: mesa/build
@@ -112,6 +111,18 @@ jobs:
           INCLUDE: ${{ env.WDK_INCLUDE }};${{ env.INCLUDE }}
         run: |
           ninja install
+
+      - name: Fix Mesa DLL names
+        run: |
+          # Sometimes zlib is built as z-1.dll instead of z.dll
+          $binPath = "$env:MESA_PREFIX\bin"
+          if (-not (Test-Path "$binPath\z.dll")) {
+            $zDll = Get-ChildItem "$binPath\z-*.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($zDll) {
+              Copy-Item $zDll.FullName "$binPath\z.dll"
+              Write-Host "Copied $($zDll.Name) to z.dll"
+            }
+          }
 
       # Part 3: Build Driver
       - name: Clone KVM guest drivers

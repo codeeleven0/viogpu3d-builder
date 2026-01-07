@@ -109,8 +109,7 @@ meson .. --prefix="%MESA_PREFIX%" ^
     -Dgallium-drivers=virgl ^
     -Dgallium-d3d10umd=true ^
     -Dgallium-wgl-dll-name=viogpu_wgl ^
-    -Dgallium-d3d10-dll-name=viogpu_d3d10 ^
-    -Db_vscrt=mt
+    -Dgallium-d3d10-dll-name=viogpu_d3d10
 
 if %errorLevel% neq 0 (
     echo ERROR: Mesa configuration failed
