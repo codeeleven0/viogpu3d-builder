@@ -55,45 +55,84 @@ jobs:
           # The d3d10umddi.h is in "um" folder, d3dkmddi.h is in "km" folder
           # We need both for Mesa D3D10 UMD build
           $sdkInclude = "C:\Program Files (x86)\Windows Kits\10\Include"
-          $sdkVersions = Get-ChildItem $sdkInclude -Directory | Sort-Object Name -Descending
 
-          foreach ($ver in $sdkVersions) {
-            $umPath = Join-Path $ver.FullName "um"
-            $kmPath = Join-Path $ver.FullName "km"
-            $sharedPath = Join-Path $ver.FullName "shared"
-            $umHeader = Join-Path $umPath "d3d10umddi.h"
-            $kmHeader = Join-Path $kmPath "d3dkmddi.h"
-
-            if ((Test-Path $umHeader) -and (Test-Path $kmHeader)) {
-              echo "Found d3d10umddi.h in: $umPath"
-              echo "Found d3dkmddi.h in: $kmPath"
-              # Include um, km, and shared paths
-              echo "WDK_INCLUDE=$umPath;$kmPath;$sharedPath" >> $env:GITHUB_ENV
-              exit 0
+          # Debug: Show what SDK versions exist
+          echo "=== Checking existing SDK versions ==="
+          if (Test-Path $sdkInclude) {
+            Get-ChildItem $sdkInclude -Directory | ForEach-Object {
+              echo "SDK Version: $($_.Name)"
+              $umPath = Join-Path $_.FullName "um"
+              $kmPath = Join-Path $_.FullName "km"
+              echo "  um exists: $(Test-Path $umPath)"
+              echo "  km exists: $(Test-Path $kmPath)"
+              if (Test-Path $umPath) {
+                $d3d10 = Join-Path $umPath "d3d10umddi.h"
+                echo "  d3d10umddi.h: $(Test-Path $d3d10)"
+              }
+              if (Test-Path $kmPath) {
+                $d3dkm = Join-Path $kmPath "d3dkmddi.h"
+                echo "  d3dkmddi.h: $(Test-Path $d3dkm)"
+              }
             }
           }
 
-          echo "Headers not found in existing SDK, installing WDK..."
-          choco install windowsdriverkit11 -y
+          # Function to find WDK headers
+          function Find-WdkHeaders {
+            $sdkVersions = Get-ChildItem $sdkInclude -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending
+            foreach ($ver in $sdkVersions) {
+              $umPath = Join-Path $ver.FullName "um"
+              $kmPath = Join-Path $ver.FullName "km"
+              $sharedPath = Join-Path $ver.FullName "shared"
+              $umHeader = Join-Path $umPath "d3d10umddi.h"
+              $kmHeader = Join-Path $kmPath "d3dkmddi.h"
 
-          # Re-check after WDK install
-          $sdkVersions = Get-ChildItem $sdkInclude -Directory | Sort-Object Name -Descending
-          foreach ($ver in $sdkVersions) {
-            $umPath = Join-Path $ver.FullName "um"
-            $kmPath = Join-Path $ver.FullName "km"
-            $sharedPath = Join-Path $ver.FullName "shared"
-            $umHeader = Join-Path $umPath "d3d10umddi.h"
-            $kmHeader = Join-Path $kmPath "d3dkmddi.h"
+              if ((Test-Path $umHeader) -and (Test-Path $kmHeader)) {
+                return "$umPath;$kmPath;$sharedPath"
+              }
+            }
+            return $null
+          }
 
-            if ((Test-Path $umHeader) -and (Test-Path $kmHeader)) {
-              echo "Found d3d10umddi.h in: $umPath"
-              echo "Found d3dkmddi.h in: $kmPath"
-              echo "WDK_INCLUDE=$umPath;$kmPath;$sharedPath" >> $env:GITHUB_ENV
-              exit 0
+          $wdkInclude = Find-WdkHeaders
+          if ($wdkInclude) {
+            echo "Found WDK headers in existing SDK"
+            echo "WDK_INCLUDE=$wdkInclude" >> $env:GITHUB_ENV
+            exit 0
+          }
+
+          echo "=== Headers not found, downloading WDK directly ==="
+
+          # Download and install WDK with headers feature
+          $wdkUrl = "https://download.microsoft.com/download/1/b/a/1ba45dc0-f79b-496a-ba42-30e87a1c37ec/wdk/wdksetup.exe"
+          $wdkInstaller = "$env:TEMP\wdksetup.exe"
+
+          echo "Downloading WDK installer..."
+          Invoke-WebRequest -Uri $wdkUrl -OutFile $wdkInstaller -UseBasicParsing
+
+          echo "Installing WDK headers..."
+          # Install only the headers feature (faster than full WDK)
+          Start-Process -FilePath $wdkInstaller -ArgumentList "/features", "+", "/q" -Wait -NoNewWindow
+
+          echo "=== Checking SDK versions after WDK install ==="
+          Get-ChildItem $sdkInclude -Directory | ForEach-Object {
+            echo "SDK Version: $($_.Name)"
+            $kmPath = Join-Path $_.FullName "km"
+            if (Test-Path $kmPath) {
+              $d3dkm = Join-Path $kmPath "d3dkmddi.h"
+              echo "  d3dkmddi.h: $(Test-Path $d3dkm)"
             }
           }
 
-          echo "ERROR: Could not find required WDK headers"
+          $wdkInclude = Find-WdkHeaders
+          if ($wdkInclude) {
+            echo "Found WDK headers after install"
+            echo "WDK_INCLUDE=$wdkInclude" >> $env:GITHUB_ENV
+            exit 0
+          }
+
+          echo "ERROR: Could not find required WDK headers after installation"
+          echo "Listing all files in SDK Include directory..."
+          Get-ChildItem $sdkInclude -Recurse -Name -Include "d3d*umddi.h","d3d*kmddi.h" | ForEach-Object { echo $_ }
           exit 1
 
       - name: Create working directories
