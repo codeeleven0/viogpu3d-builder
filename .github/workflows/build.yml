@@ -1,0 +1,137 @@
+name: Build viogpu3d Driver
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      mesa_branch:
+        description: 'Mesa branch to build'
+        required: false
+        default: 'viogpu_win'
+      driver_branch:
+        description: 'KVM guest drivers branch'
+        required: false
+        default: 'viogpu_win'
+
+env:
+  MESA_REPO: https://gitlab.freedesktop.org/max8rr8/mesa
+  MESA_BRANCH: ${{ github.event.inputs.mesa_branch || 'viogpu_win' }}
+  DRIVER_REPO: https://github.com/max8rr8/kvm-guest-drivers-windows
+  DRIVER_BRANCH: ${{ github.event.inputs.driver_branch || 'viogpu_win' }}
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Meson and Ninja
+        run: |
+          pip install meson ninja mako
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install winflexbison
+        run: |
+          choco install winflexbison3 -y
+          # Add to PATH - winflexbison installs to chocolatey bin
+          echo "C:\ProgramData\chocolatey\bin" >> $env:GITHUB_PATH
+
+      - name: Create working directories
+        run: |
+          mkdir mesa_prefix
+          mkdir build_output
+          echo "MESA_PREFIX=${{ github.workspace }}\mesa_prefix" >> $env:GITHUB_ENV
+
+      # Part 2: Build Mesa
+      - name: Clone Mesa source
+        run: |
+          git clone --depth 10 --branch ${{ env.MESA_BRANCH }} ${{ env.MESA_REPO }} mesa
+
+      - name: Configure Mesa build
+        working-directory: mesa
+        run: |
+          mkdir build
+          cd build
+          meson .. --prefix=$env:MESA_PREFIX `
+            -Dgallium-drivers=virgl `
+            -Dgallium-d3d10umd=true `
+            -Dgallium-wgl-dll-name=viogpu_wgl `
+            -Dgallium-d3d10-dll-name=viogpu_d3d10 `
+            -Db_vscrt=mt
+
+      - name: Build and install Mesa
+        working-directory: mesa/build
+        run: |
+          ninja install
+
+      # Part 3: Build Driver
+      - name: Clone KVM guest drivers
+        run: |
+          git clone --branch ${{ env.DRIVER_BRANCH }} ${{ env.DRIVER_REPO }} kvm-guest-drivers-windows
+
+      - name: Build viogpu driver
+        working-directory: kvm-guest-drivers-windows/viogpu
+        run: |
+          .\build_AllNoSdv.bat
+
+      - name: Collect build artifacts
+        run: |
+          # Copy Mesa DLLs
+          Copy-Item -Path "$env:MESA_PREFIX\bin\*.dll" -Destination "build_output\" -Force -ErrorAction SilentlyContinue
+          Copy-Item -Path "$env:MESA_PREFIX\lib\*.dll" -Destination "build_output\" -Force -ErrorAction SilentlyContinue
+
+          # Copy driver files - search for built driver artifacts
+          $driverPaths = @(
+            "kvm-guest-drivers-windows\viogpu\viogpu3d\x64",
+            "kvm-guest-drivers-windows\viogpu\viogpu3d\Win10Release",
+            "kvm-guest-drivers-windows\viogpu\viogpu3d\Win11Release",
+            "kvm-guest-drivers-windows\Build"
+          )
+
+          foreach ($path in $driverPaths) {
+            if (Test-Path $path) {
+              Copy-Item -Path "$path\*" -Destination "build_output\" -Recurse -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+          # List collected artifacts
+          Write-Host "=== Collected build artifacts ==="
+          Get-ChildItem -Path "build_output" -Recurse | Format-Table Name, Length, Directory
+
+      - name: Upload Mesa artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mesa-dlls
+          path: |
+            ${{ env.MESA_PREFIX }}/bin/*.dll
+            ${{ env.MESA_PREFIX }}/lib/*.dll
+          if-no-files-found: warn
+
+      - name: Upload driver artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: viogpu3d-driver
+          path: build_output/
+          if-no-files-found: warn
+
+      - name: Upload full build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: full-build
+          path: |
+            kvm-guest-drivers-windows/viogpu/
+          if-no-files-found: warn
