@@ -98,25 +98,26 @@ jobs:
 
       - name: Configure Mesa build
         working-directory: mesa
+        env:
+          # Add WDK include path to INCLUDE for MSVC to find d3d10umddi.h
+          INCLUDE: ${{ env.WDK_INCLUDE }};${{ env.INCLUDE }}
         run: |
           mkdir build
           cd build
 
-          # Pass WDK include path to compiler
-          $wdkArg = "-I$env:WDK_INCLUDE"
-          echo "Using WDK include: $wdkArg"
+          echo "INCLUDE paths: $env:INCLUDE"
 
-          meson .. --prefix=$env:MESA_PREFIX `
+          meson setup .. --prefix=$env:MESA_PREFIX `
             -Dgallium-drivers=virgl `
             -Dgallium-d3d10umd=true `
             -Dgallium-wgl-dll-name=viogpu_wgl `
             -Dgallium-d3d10-dll-name=viogpu_d3d10 `
-            -Db_vscrt=mt `
-            "-Dc_args=$wdkArg" `
-            "-Dcpp_args=$wdkArg"
+            -Db_vscrt=mt
 
       - name: Build and install Mesa
         working-directory: mesa/build
+        env:
+          INCLUDE: ${{ env.WDK_INCLUDE }};${{ env.INCLUDE }}
         run: |
           ninja install
 
