@@ -158,7 +158,7 @@ jobs:
       - name: Sign driver files
         shell: cmd
         run: |
-          ..\build\signAll.bat Win10
+          ..\build\signAll.bat
           copy ..\build\VirtIOTestCert.* .
           copy ..\build\VirtIOTestCert.* build_output/
           copy ..\build\VirtIOTestCert.* kvm-guest-drivers-windows/viogpu/
