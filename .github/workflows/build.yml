@@ -43,7 +43,7 @@ jobs:
             --add Microsoft.VisualStudio.Component.VC.Runtimes.ARM64.Spectre `
             --quiet --norestart --force
           # Wait for completion
-          Start-Sleep -Seconds 60
+          Start-Sleep -Seconds 5
       - name: Install Meson and Ninja
         run: |
           pip install meson ninja mako pyyaml
