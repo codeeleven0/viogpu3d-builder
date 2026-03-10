@@ -75,7 +75,7 @@ REM Build driver
 echo [Step 2/2] Building viogpu3d driver...
 cd kvm-guest-drivers-windows\viogpu
 REM call build_AllNoSdv.bat Win10
-call ..\build\build.bat viogpu.sln "Win10"
+call ..\build\build.bat viogpu.sln "Win11" ARM64
 if %errorLevel% neq 0 (
     echo WARNING: Driver build may have issues, check output above
 )
