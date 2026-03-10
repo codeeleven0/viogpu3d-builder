@@ -136,7 +136,7 @@ jobs:
               <ClCompile><SpectreMitigation>false</SpectreMitigation></ClCompile>
             </ItemDefinitionGroup>
           </Project>
-          "@ | Set-Content "kvm-guest-drivers-windows\Directory.Build.props"
+          "@ | Set-Content "kvm-guest-drivers-windows\Directory.Build.targets"
 
       - name: Patch driver source
         run: |
