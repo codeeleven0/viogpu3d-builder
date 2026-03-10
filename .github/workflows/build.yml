@@ -145,7 +145,7 @@ jobs:
               <ClCompile><SpectreMitigation>false</SpectreMitigation></ClCompile>
             </ItemDefinitionGroup>
           </Project>
-          "@ | Set-Content "kvm-guest-drivers-windows\Directory.Build.targets"
+          "@ | Set-Content "kvm-guest-drivers-windows\viogpu\Directory.Build.config"
 
       - name: Patch driver source
         run: |
@@ -154,7 +154,7 @@ jobs:
       - name: Build viogpu driver
         working-directory: kvm-guest-drivers-windows/viogpu
         run: |
-          .\build_AllNoSdv.bat
+          ..\build\build.bat viogpu.sln Win10 ARM64
 
       - name: Collect build artifacts
         run: |
