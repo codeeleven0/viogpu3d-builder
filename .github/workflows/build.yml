@@ -173,6 +173,7 @@ jobs:
           $store.Open("ReadWrite")
           $store.Add($cert)
           $store.Close()
+          Export-Certificate -Cert $cert -FilePath "build_output\viogpu3d-testcert.cer" -Type CERT
 
       - name: Sign driver files
         shell: pwsh
