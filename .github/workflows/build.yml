@@ -155,7 +155,53 @@ jobs:
         working-directory: kvm-guest-drivers-windows/viogpu
         run: |
           ..\build\build.bat viogpu.sln Win10 ARM64
+      - name: Create self-signed test certificate
+        shell: pwsh
+        run: |
+          $cert = New-SelfSignedCertificate `
+            -Subject "CN=viogpu3d Test" `
+            -Type CodeSigningCert `
+            -CertStoreLocation Cert:\LocalMachine\My `
+            -KeyUsage DigitalSignature `
+            -HashAlgorithm SHA256
+          
+          $thumbprint = $cert.Thumbprint
+          echo "CERT_THUMBPRINT=$thumbprint" >> $env:GITHUB_ENV
+          
+          # Also add to Trusted Publishers and Root so signtool doesn't complain
+          $store = [System.Security.Cryptography.X509Certificates.X509Store]::new("TrustedPublisher","LocalMachine")
+          $store.Open("ReadWrite")
+          $store.Add($cert)
+          $store.Close()
 
+      - name: Sign driver files
+        shell: pwsh
+        run: |
+          $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" `
+            -Recurse -Filter signtool.exe | 
+            Where-Object { $_.FullName -match "arm64|x64" } |
+            Select-Object -First 1 -ExpandProperty FullName
+          
+          Get-ChildItem build_output -Include *.sys,*.dll,*.cat -Recurse | ForEach-Object {
+            & $signtool sign `
+              /sha1 $env:CERT_THUMBPRINT `
+              /fd SHA256 `
+              /t http://timestamp.digicert.com `
+              $_.FullName
+          }
+          
+          # Regenerate .cat if present and re-sign it
+          Get-ChildItem build_output -Filter *.inf -Recurse | ForEach-Object {
+            $dir = $_.DirectoryName
+            & inf2cat /driver:$dir /os:10_X64,10_ARM64 2>$null
+            Get-ChildItem $dir -Filter *.cat | ForEach-Object {
+              & $signtool sign `
+                /sha1 $env:CERT_THUMBPRINT `
+                /fd SHA256 `
+                /t http://timestamp.digicert.com `
+                $_.FullName
+            }
+          }
       - name: Collect build artifacts
         run: |
           # Copy Mesa DLLs
