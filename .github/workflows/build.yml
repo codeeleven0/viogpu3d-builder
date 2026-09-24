@@ -17,9 +17,9 @@ on:
         default: '13d74bb75df0a09bd01307b32b0ee0396cdd3279'
 
 env:
-  MESA_REPO: https://github.com/AlanoSong/virtio-win-mesa
+  MESA_REPO: 'https://github.com/AlanoSong/virtio-win-mesa'
   MESA_BRANCH: ${{ github.event.inputs.mesa_branch || '7ad10727e0c547cbd7b1b587700346bdfdc74d8a' }}
-  DRIVER_REPO: https://github.com/AlanoSong/kvm-guest-drivers-windows
+  DRIVER_REPO: 'https://github.com/AlanoSong/kvm-guest-drivers-windows'
   DRIVER_BRANCH: ${{ github.event.inputs.driver_branch || '13d74bb75df0a09bd01307b32b0ee0396cdd3279' }}
 
 jobs:
@@ -90,7 +90,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path mesa_prefix
           New-Item -ItemType Directory -Force -Path build_output
-          "MESA_PREFIX=${{ github.workspace }}\mesa_prefix" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "MESA_PREFIX=$PWD\mesa_prefix" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       # Part 2: Build Mesa
       - name: Clone Mesa source
@@ -104,7 +104,7 @@ jobs:
       - name: Remove broken winstub include
         shell: pwsh
         run: |
-          $target = "${{ github.workspace }}\mesa\src\util\format\u_format.h"
+          $target = "mesa\src\util\format\u_format.h"
           if (Test-Path $target) {
             (Get-Content $target) -replace '#include\s+"win-stub\.h"', '// #include "win-stub.h"' | Set-Content $target
           }
@@ -175,7 +175,7 @@ jobs:
         working-directory: kvm-guest-drivers-windows/viogpu
         shell: cmd
         env:
-          MSBUILDADDITIONALFLAGS: /p:SpectreMitigation=false /p:TreatWarningAsError=false /p:DisableSpecificWarnings=4100 /p:MESA_PREFIX_ARM64=${{ github.workspace }}\mesa_prefix /p:ForcedIncludeFiles=${{ github.workspace }}\kvm-guest-drivers-windows\viogpu\dbgfix.h
+          MSBUILDADDITIONALFLAGS: '/p:SpectreMitigation=false /p:TreatWarningAsError=false /p:DisableSpecificWarnings=4100 /p:MESA_PREFIX_ARM64=%GITHUB_WORKSPACE%\mesa_prefix /p:ForcedIncludeFiles=%GITHUB_WORKSPACE%\kvm-guest-drivers-windows\viogpu\dbgfix.h'
         run: |
           ..\build\build.bat viogpu.sln Win10 ARM64
 
