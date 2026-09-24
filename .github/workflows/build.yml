@@ -150,38 +150,47 @@ jobs:
       - name: Create DbgPrint Stub Header
         shell: pwsh
         run: |
-          Set-Content -Path "kvm-guest-drivers-windows\viogpu\dbgfix.h" -Value @"
-#pragma once
-#include <ntddk.h>
-#ifdef DbgPrint
-#undef DbgPrint
-#endif
-#define DbgPrint(...) ((ULONG)0)
-#ifdef DbgPrintEx
-#undef DbgPrintEx
-#endif
-#define DbgPrintEx(...) ((ULONG)0)
-"@ -Encoding utf8
+          $headerLines = @(
+            '#pragma once',
+            '#include <ntddk.h>',
+            '#ifdef DbgPrint',
+            '#undef DbgPrint',
+            '#endif',
+            '#define DbgPrint(...) ((ULONG)0)',
+            '#ifdef DbgPrintEx',
+            '#undef DbgPrintEx',
+            '#endif',
+            '#define DbgPrintEx(...) ((ULONG)0)'
+          )
+          [System.IO.File]::WriteAllLines("kvm-guest-drivers-windows\viogpu\dbgfix.h", $headerLines)
 
-      - name: Configure MSBuild Parameters via Response File
+      - name: Configure Driver Build Properties
         shell: pwsh
         run: |
           $repoRoot = (Get-Location).Path
           $mesaDir = Join-Path $repoRoot "mesa_prefix"
-          $dbgHeader = Join-Path $repoRoot "kvm-guest-drivers-windows\viogpu\dbgfix.h"
 
-          $rspLines = @(
-            "/p:SpectreMitigation=false",
-            "/p:TreatWarningAsError=false",
-            "/p:DisableSpecificWarnings=4100",
-            "/p:MESA_PREFIX_ARM64=$mesaDir",
-            "/p:ForcedIncludeFiles=$dbgHeader"
+          $propsLines = @(
+            '<Project>',
+            '  <PropertyGroup>',
+            "    <MESA_PREFIX_ARM64>$mesaDir</MESA_PREFIX_ARM64>",
+            '  </PropertyGroup>',
+            '  <ItemDefinitionGroup>',
+            '    <ClCompile>',
+            '      <SpectreMitigation>false</SpectreMitigation>',
+            '      <TreatWarningAsError>false</TreatWarningAsError>',
+            '      <DisableSpecificWarnings>4100;%(DisableSpecificWarnings)</DisableSpecificWarnings>',
+            '      <ForcedIncludeFiles>$(MSBuildThisFileDirectory)dbgfix.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>',
+            '    </ClCompile>',
+            '  </ItemDefinitionGroup>',
+            '</Project>'
           )
 
-          $rspPath = "kvm-guest-drivers-windows\viogpu\Directory.Build.rsp"
-          [System.IO.File]::WriteAllLines($rspPath, $rspLines)
-          Write-Host "Generated Directory.Build.rsp:"
-          Get-Content $rspPath
+          # Directory.Build.props is natively parsed by every vcxproj under viogpu
+          $propsPath = "kvm-guest-drivers-windows\viogpu\Directory.Build.props"
+          [System.IO.File]::WriteAllLines($propsPath, $propsLines)
+          Write-Host "Generated Directory.Build.props:"
+          Get-Content $propsPath
 
       - name: Patch driver source
         shell: pwsh
