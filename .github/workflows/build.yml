@@ -167,7 +167,7 @@ jobs:
           #ifdef DbgPrint
           #undef DbgPrint
           #endif
-          #define DbgPrint(level, ...) DbgPrintEx(DPFLTR_DEFAULT_ID, DPFLTR_ERROR_LEVEL, __VA_ARGS__)
+          #define DbgPrint(...) ((ULONG)0)
 
           "@
 
