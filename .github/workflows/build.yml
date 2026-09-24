@@ -66,15 +66,15 @@ jobs:
       - name: Find Windows SDK headers
         run: |
           $sdkInclude = "C:\Program Files (x86)\Windows Kits\10\Include"
-          $sdkVersions = Get-ChildItem $sdkInclude -Directory | Sort-Object Name -Descending
+          $sdkVersions = Get-ChildItem$sdkInclude -Directory | Sort-Object Name -Descending
 
-          foreach ($ver in $sdkVersions) {
-            $umPath = Join-Path $ver.FullName "um"
-            $sharedPath = Join-Path $ver.FullName "shared"
-            $d3d10Header = Join-Path $umPath "d3d10umddi.h"
-            $d3dkmHeader = Join-Path $sharedPath "d3dkmddi.h"
+          foreach ($ver in$sdkVersions) {
+            $umPath = Join-Path$ver.FullName "um"
+            $sharedPath = Join-Path$ver.FullName "shared"
+            $d3d10Header = Join-Path$umPath "d3d10umddi.h"
+            $d3dkmHeader = Join-Path$sharedPath "d3dkmddi.h"
 
-            if ((Test-Path $d3d10Header) -and (Test-Path $d3dkmHeader)) {
+            if ((Test-Path $d3d10Header) -and (Test-Path$d3dkmHeader)) {
               echo "Found d3d10umddi.h in: $umPath"
               echo "Found d3dkmddi.h in: $sharedPath"
               echo "WDK_INCLUDE=$umPath;$sharedPath" >> $env:GITHUB_ENV
@@ -104,7 +104,7 @@ jobs:
         shell: pwsh
         run: |
           $target = "${{ github.workspace }}\mesa\src\util\format\u_format.h"
-          (Get-Content $target) -replace '#include\s+"win-stub\.h"', '// #include "win-stub.h"' | Set-Content $target
+          (Get-Content $target) -replace '#include\s+"win-stub\.h"', '// #include "win-stub.h"' \vert{} Set-Content $target
 
       - name: Configure Mesa build
         working-directory: mesa
@@ -154,38 +154,40 @@ jobs:
         shell: pwsh
         run: |
           # 1. Create a clean stub header in the viogpu directory for DbgPrint
-          $fixHeader = @"
-          #pragma once
-          #include <ntddk.h>
+          $fixHeader = @'
+#pragma once
+#include <ntddk.h>
 
-          #ifdef DbgPrint
-          #undef DbgPrint
-          #endif
-          #define DbgPrint(...) ((ULONG)0)
+#ifdef DbgPrint
+#undef DbgPrint
+#endif
+#define DbgPrint(...) ((ULONG)0)
 
-          #ifdef DbgPrintEx
-          #undef DbgPrintEx
-          #endif
-          #define DbgPrintEx(...) ((ULONG)0)
-          "@
+#ifdef DbgPrintEx
+#undef DbgPrintEx
+#endif
+#define DbgPrintEx(...) ((ULONG)0)
+'@
           Set-Content -Path "kvm-guest-drivers-windows\viogpu\dbgfix.h" -Value $fixHeader -Encoding utf8
 
           # 2. Inject forced include, disable Spectre, disable warnings-as-errors, and pass MESA_PREFIX_ARM64
-          @"
-          <Project>
-            <PropertyGroup>
-              <MESA_PREFIX_ARM64>${{ env.MESA_PREFIX }}</MESA_PREFIX_ARM64>
-            </PropertyGroup>
-            <ItemDefinitionGroup>
-              <ClCompile>
-                <SpectreMitigation>false</SpectreMitigation>
-                <TreatWarningAsError>false</TreatWarningAsError>
-                <DisableSpecificWarnings>4100;%(DisableSpecificWarnings)</DisableSpecificWarnings>
-                <ForcedIncludeFiles>$(MSBuildThisFileDirectory)dbgfix.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
-              </ClCompile>
-            </ItemDefinitionGroup>
-          </Project>
-          "@ | Set-Content "kvm-guest-drivers-windows\viogpu\Directory.Build.props" -Encoding utf8
+          $mesaPrefix = "${{ env.MESA_PREFIX }}"
+          $propsContent = @"
+<Project>
+  <PropertyGroup>
+    <MESA_PREFIX_ARM64>$mesaPrefix</MESA_PREFIX_ARM64>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <SpectreMitigation>false</SpectreMitigation>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <DisableSpecificWarnings>4100;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ForcedIncludeFiles>`$(MSBuildThisFileDirectory)dbgfix.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+    </ClCompile>
+  </ItemDefinitionGroup>
+</Project>
+"@
+          Set-Content -Path "kvm-guest-drivers-windows\viogpu\Directory.Build.props" -Value $propsContent -Encoding utf8
 
       - name: Patch driver source
         run: |
