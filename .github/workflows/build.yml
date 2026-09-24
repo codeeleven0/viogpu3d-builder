@@ -66,18 +66,18 @@ jobs:
         shell: pwsh
         run: |
           $sdkInclude = "C:\Program Files (x86)\Windows Kits\10\Include"
-          $sdkVersions = Get-ChildItem $sdkInclude -Directory | Sort-Object Name -Descending
+          $sdkVersions = Get-ChildItem$sdkInclude -Directory | Sort-Object Name -Descending
 
-          foreach ($ver in $sdkVersions) {
-            $umPath = Join-Path $ver.FullName "um"
-            $sharedPath = Join-Path $ver.FullName "shared"
-            $d3d10Header = Join-Path $umPath "d3d10umddi.h"
-            $d3dkmHeader = Join-Path $sharedPath "d3dkmddi.h"
+          foreach ($ver in$sdkVersions) {
+            $umPath = Join-Path$ver.FullName "um"
+            $sharedPath = Join-Path$ver.FullName "shared"
+            $d3d10Header = Join-Path$umPath "d3d10umddi.h"
+            $d3dkmHeader = Join-Path$sharedPath "d3dkmddi.h"
 
-            if ((Test-Path $d3d10Header) -and (Test-Path $d3dkmHeader)) {
+            if ((Test-Path $d3d10Header) -and (Test-Path$d3dkmHeader)) {
               Write-Host "Found d3d10umddi.h in: $umPath"
               Write-Host "Found d3dkmddi.h in: $sharedPath"
-              "WDK_INCLUDE=$umPath;$sharedPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+              "WDK_INCLUDE=$umPath;$sharedPath" \vert{} Out-File -FilePath $env:GITHUB_ENV -Append
               exit 0
             }
           }
@@ -90,7 +90,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path mesa_prefix
           New-Item -ItemType Directory -Force -Path build_output
-          "MESA_PREFIX=$PWD\mesa_prefix" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "MESA_PREFIX=$PWD\mesa_prefix" \vert{} Out-File -FilePath $env:GITHUB_ENV -Append
 
       # Part 2: Build Mesa
       - name: Clone Mesa source
@@ -106,7 +106,7 @@ jobs:
         run: |
           $target = "mesa\src\util\format\u_format.h"
           if (Test-Path $target) {
-            (Get-Content $target) -replace '#include\s+"win-stub\.h"', '// #include "win-stub.h"' | Set-Content $target
+            (Get-Content $target) -replace '#include\s+"win-stub\.h"', '// #include "win-stub.h"' \vert{} Set-Content $target
           }
 
       - name: Configure Mesa build
@@ -147,28 +147,28 @@ jobs:
           git submodule update --init --recursive
           cd ..
 
-      - name: Create DbgPrint Stub Header
+      - name: Eradicate DbgPrint Calls in Source
         shell: pwsh
         run: |
-          $headerLines = @(
-            '#pragma once',
-            '#include <ntddk.h>',
-            '#ifdef DbgPrint',
-            '#undef DbgPrint',
-            '#endif',
-            '#define DbgPrint(...) ((ULONG)0)',
-            '#ifdef DbgPrintEx',
-            '#undef DbgPrintEx',
-            '#endif',
-            '#define DbgPrintEx(...) ((ULONG)0)'
-          )
-          [System.IO.File]::WriteAllLines("kvm-guest-drivers-windows\viogpu\dbgfix.h", $headerLines)
+          $files = Get-ChildItem -Path "kvm-guest-drivers-windows\viogpu" -Recurse -File | Where-Object { $_.Extension -match '\.(cpp\vert{}c\vert{}h)$' }
+          foreach ($f in$files) {
+              $txt = [System.IO.File]::ReadAllText($f.FullName)
+              if ($txt -match 'DbgPrint') {
+                  $lines =$txt -split "`r`n"
+                  for ($i = 0; $i -lt $lines.Count; $i++) {
+                      if ($lines[$i] -notmatch '^\s*#\s*(define|undef)') {
+                          $lines[$i] = $lines[$i] -replace '\bDbgPrintEx?\s*\(', '__noop('
+                      }
+                  }
+                  [System.IO.File]::WriteAllLines($f.FullName, $lines)
+              }
+          }
 
       - name: Configure Driver Build Properties
         shell: pwsh
         run: |
           $repoRoot = (Get-Location).Path
-          $mesaDir = Join-Path $repoRoot "mesa_prefix"
+          $mesaDir = Join-Path$repoRoot "mesa_prefix"
 
           $propsLines = @(
             '<Project>',
@@ -179,16 +179,13 @@ jobs:
             '    <ClCompile>',
             '      <SpectreMitigation>false</SpectreMitigation>',
             '      <TreatWarningAsError>false</TreatWarningAsError>',
-            '      <DisableSpecificWarnings>4100;%(DisableSpecificWarnings)</DisableSpecificWarnings>',
-            '      <ForcedIncludeFiles>$(MSBuildThisFileDirectory)dbgfix.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>',
+            '      <DisableSpecificWarnings>4100;2220;%(DisableSpecificWarnings)</DisableSpecificWarnings>',
             '    </ClCompile>',
             '  </ItemDefinitionGroup>',
             '</Project>'
           )
-
-          # Directory.Build.props is natively parsed by every vcxproj under viogpu
           $propsPath = "kvm-guest-drivers-windows\viogpu\Directory.Build.props"
-          [System.IO.File]::WriteAllLines($propsPath, $propsLines)
+          [System.IO.File]::WriteAllLines($propsPath,$propsLines)
           Write-Host "Generated Directory.Build.props:"
           Get-Content $propsPath
 
@@ -227,7 +224,7 @@ jobs:
             "kvm-guest-drivers-windows\Build"
           )
 
-          foreach ($path in $driverPaths) {
+          foreach ($path in$driverPaths) {
             if (Test-Path $path) {
               Copy-Item -Path "$path\*" -Destination "build_output\" -Recurse -Force -ErrorAction SilentlyContinue
             }
