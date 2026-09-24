@@ -14,10 +14,10 @@ echo ===========================================================================
 echo.
 
 REM Configuration
-set "MESA_REPO=https://gitlab.freedesktop.org/max8rr8/mesa"
-set "MESA_BRANCH=viogpu_win"
-set "DRIVER_REPO=https://github.com/max8rr8/kvm-guest-drivers-windows"
-set "DRIVER_BRANCH=viogpu_win"
+set "MESA_REPO=https://github.com/AlanoSong/virtio-win-mesa"
+set "MESA_BRANCH=7ad10727e0c547cbd7b1b587700346bdfdc74d8a"
+set "DRIVER_REPO=https://github.com/AlanoSong/kvm-guest-drivers-windows"
+set "DRIVER_BRANCH=13d74bb75df0a09bd01307b32b0ee0396cdd3279"
 
 REM Set working directory
 if "%WORK_DIR%"=="" set "WORK_DIR=%CD%\viogpu3d-build"
@@ -112,10 +112,17 @@ echo [Step 2/6] Cloning Mesa source code...
 if exist "mesa" (
     echo Mesa directory exists, pulling latest changes...
     cd mesa
+    git checkout %MESA_BRANCH%
     git pull
+    git checkout %MESA_BRANCH%
     cd ..
 ) else (
-    git clone --depth 10 --branch %MESA_BRANCH% %MESA_REPO% mesa
+    git clone %MESA_REPO% mesa
+    cd mesa
+    git checkout %MESA_BRANCH%
+    git pull
+    git checkout %MESA_BRANCH%
+    cd ..
     if %errorLevel% neq 0 (
         echo ERROR: Failed to clone Mesa repository
         pause
@@ -160,10 +167,17 @@ echo [Step 5/6] Cloning KVM guest drivers...
 if exist "kvm-guest-drivers-windows" (
     echo Driver directory exists, pulling latest changes...
     cd kvm-guest-drivers-windows
+    git checkout %DRIVER_BRANCH%
     git pull
+    git checkout %DRIVER_BRANCH%
     cd ..
 ) else (
-    git clone --branch %DRIVER_BRANCH% %DRIVER_REPO% kvm-guest-drivers-windows
+    git clone %DRIVER_REPO% kvm-guest-drivers-windows
+    cd kvm-guest-drivers-windows
+    git checkout %DRIVER_BRANCH%
+    git pull
+    git checkout %DRIVER_BRANCH%
+    cd ..
     if %errorLevel% neq 0 (
         echo ERROR: Failed to clone driver repository
         pause

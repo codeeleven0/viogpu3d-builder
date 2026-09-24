@@ -8,19 +8,19 @@ on:
   workflow_dispatch:
     inputs:
       mesa_branch:
-        description: 'Mesa branch to build'
+        description: 'Mesa commit to build'
         required: false
-        default: 'viogpu_win'
+        default: '7ad10727e0c547cbd7b1b587700346bdfdc74d8a'
       driver_branch:
-        description: 'KVM guest drivers branch'
+        description: 'KVM guest drivers commit'
         required: false
-        default: 'viogpu3d'
+        default: '13d74bb75df0a09bd01307b32b0ee0396cdd3279'
 
 env:
-  MESA_REPO: https://gitlab.freedesktop.org/max8rr8/mesa
-  MESA_BRANCH: ${{ github.event.inputs.mesa_branch || 'viogpu_win' }}
-  DRIVER_REPO: https://github.com/max8rr8/kvm-guest-drivers-windows
-  DRIVER_BRANCH: ${{ github.event.inputs.driver_branch || 'viogpu3d' }}
+  MESA_REPO: https://github.com/AlanoSong/virtio-win-mesa
+  MESA_BRANCH: ${{ github.event.inputs.mesa_branch || '7ad10727e0c547cbd7b1b587700346bdfdc74d8a' }}
+  DRIVER_REPO: https://github.com/AlanoSong/kvm-guest-drivers-windows
+  DRIVER_BRANCH: ${{ github.event.inputs.driver_branch || '13d74bb75df0a09bd01307b32b0ee0396cdd3279' }}
 
 jobs:
   build:
@@ -93,7 +93,12 @@ jobs:
       # Part 2: Build Mesa
       - name: Clone Mesa source
         run: |
-          git clone --depth 10 --branch ${{ env.MESA_BRANCH }} ${{ env.MESA_REPO }} mesa
+          git clone ${{ env.MESA_REPO }} mesa
+          cd mesa
+          git checkout ${{ env.MESA_BRANCH }}
+          git pull
+          git checkout ${{ env.MESA_BRANCH }}
+          cd ..
 
       - name: Configure Mesa build
         working-directory: mesa
@@ -135,7 +140,13 @@ jobs:
       # Part 3: Build Driver
       - name: Clone KVM guest drivers
         run: |
-          git clone --branch ${{ env.DRIVER_BRANCH }} ${{ env.DRIVER_REPO }} kvm-guest-drivers-windows
+          git clone ${{ env.DRIVER_REPO }} kvm-guest-drivers-windows
+          cd kvm-guest-drivers-windows
+          git checkout ${{ env.DRIVER_BRANCH }}
+          git pull
+          git checkout ${{ env.DRIVER_BRANCH }}
+          cd ..
+
       - name: Disable Spectre mitigation requirement
         shell: pwsh
         run: |

@@ -14,8 +14,8 @@ echo ===========================================================================
 echo.
 
 REM Configuration
-set "MESA_REPO=https://gitlab.freedesktop.org/max8rr8/mesa"
-set "MESA_BRANCH=viogpu_win"
+set "MESA_REPO=https://github.com/AlanoSong/virtio-win-mesa"
+set "MESA_BRANCH=7ad10727e0c547cbd7b1b587700346bdfdc74d8a"
 
 REM Set working directory
 if "%WORK_DIR%"=="" set "WORK_DIR=%CD%\viogpu3d-build"
@@ -83,10 +83,17 @@ echo [Step 2/4] Getting Mesa source code...
 if exist "mesa" (
     echo Mesa directory exists, pulling latest changes...
     cd mesa
+    git checkout %MESA_BRANCH%
     git pull
+    git checkout %MESA_BRANCH%
     cd ..
 ) else (
-    git clone --depth 10 --branch %MESA_BRANCH% %MESA_REPO% mesa
+    git clone %MESA_REPO% mesa
+    cd mesa
+    git checkout %MESA_BRANCH%
+    git pull
+    git checkout %MESA_BRANCH%
+    cd ..
     if %errorLevel% neq 0 (
         echo ERROR: Failed to clone Mesa repository
         pause

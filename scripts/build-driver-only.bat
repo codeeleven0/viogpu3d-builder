@@ -14,8 +14,8 @@ echo ===========================================================================
 echo.
 
 REM Configuration
-set "DRIVER_REPO=https://github.com/max8rr8/kvm-guest-drivers-windows"
-set "DRIVER_BRANCH=viogpu_win"
+set "DRIVER_REPO=https://github.com/AlanoSong/kvm-guest-drivers-windows"
+set "DRIVER_BRANCH=13d74bb75df0a09bd01307b32b0ee0396cdd3279"
 
 REM Set working directory
 if "%WORK_DIR%"=="" set "WORK_DIR=%CD%\viogpu3d-build"
@@ -59,10 +59,17 @@ echo [Step 1/2] Getting KVM guest drivers source code...
 if exist "kvm-guest-drivers-windows" (
     echo Driver directory exists, pulling latest changes...
     cd kvm-guest-drivers-windows
+    git checkout %DRIVER_BRANCH%
     git pull
+    git checkout %DRIVER_BRANCH%
     cd ..
 ) else (
-    git clone --branch %DRIVER_BRANCH% %DRIVER_REPO% kvm-guest-drivers-windows
+    git clone %DRIVER_REPO% kvm-guest-drivers-windows
+    cd kvm-guest-drivers-windows
+    git checkout %DRIVER_BRANCH%
+    git pull
+    git checkout %DRIVER_BRANCH%
+    cd ..
     if %errorLevel% neq 0 (
         echo ERROR: Failed to clone driver repository
         pause
