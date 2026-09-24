@@ -99,7 +99,13 @@ jobs:
           git pull
           git checkout ${{ env.MESA_BRANCH }}
           cd ..
-
+      
+      - name: Remove broken winstub include
+        shell: pwsh
+        run: |
+          $target = "${{ github.workspace }}\mesa\src\util\format\u_format.h"
+          (Get-Content $target) -replace '#include\s+"win-stub\.h"', '// #include "win-stub.h"' | Set-Content $target
+      
       - name: Configure Mesa build
         working-directory: mesa
         env:
