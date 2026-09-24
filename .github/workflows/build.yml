@@ -175,10 +175,9 @@ jobs:
         working-directory: kvm-guest-drivers-windows/viogpu
         shell: cmd
         env:
-          MESA_PREFIX_ARM64: ${{ env.MESA_PREFIX }}
+          MSBUILDADDITIONALFLAGS: /p:SpectreMitigation=false /p:TreatWarningAsError=false /p:DisableSpecificWarnings=4100 /p:MESA_PREFIX_ARM64=${{ github.workspace }}\mesa_prefix /p:ForcedIncludeFiles=${{ github.workspace }}\kvm-guest-drivers-windows\viogpu\dbgfix.h
         run: |
-          set "EXTRA_FLAGS=/p:SpectreMitigation=false /p:TreatWarningAsError=false /p:DisableSpecificWarnings=4100 /p:ForcedIncludeFiles=%CD%\dbgfix.h /p:MESA_PREFIX_ARM64=%MESA_PREFIX_ARM64%"
-          ..\build\build.bat viogpu.sln Win10 ARM64 %EXTRA_FLAGS%
+          ..\build\build.bat viogpu.sln Win10 ARM64
 
       - name: Sign driver files
         working-directory: kvm-guest-drivers-windows/viogpu
