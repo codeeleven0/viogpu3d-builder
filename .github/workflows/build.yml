@@ -34,6 +34,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
       - name: Install Spectre-mitigated libs
         shell: pwsh
         run: |
@@ -42,28 +43,28 @@ jobs:
             --installPath "C:\Program Files\Microsoft Visual Studio\2022\Enterprise" `
             --add Microsoft.VisualStudio.Component.VC.Runtimes.ARM64.Spectre `
             --quiet --norestart --force
-          # Wait for completion
           Start-Sleep -Seconds 5
+
       - name: Install Meson and Ninja
         run: |
           pip install meson ninja mako pyyaml
+
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: arm64
+
       - name: Install winflexbison
         run: |
           choco install winflexbison3 -y
-          # Add to PATH - winflexbison installs to chocolatey bin
           echo "C:\ProgramData\chocolatey\bin" >> $env:GITHUB_PATH
 
       - name: Install Windows Driver Kit (WDK)
         run: |
           choco install windowsdriverkit10 -y
-      
+
       - name: Find Windows SDK headers
         run: |
-          # d3d10umddi.h is in "um", it includes d3dkmddi.h which is in "shared"
           $sdkInclude = "C:\Program Files (x86)\Windows Kits\10\Include"
           $sdkVersions = Get-ChildItem $sdkInclude -Directory | Sort-Object Name -Descending
 
@@ -96,20 +97,18 @@ jobs:
           git clone ${{ env.MESA_REPO }} mesa
           cd mesa
           git checkout ${{ env.MESA_BRANCH }}
-          git pull
-          git checkout ${{ env.MESA_BRANCH }}
+          git submodule update --init --recursive
           cd ..
-      
+
       - name: Remove broken winstub include
         shell: pwsh
         run: |
           $target = "${{ github.workspace }}\mesa\src\util\format\u_format.h"
           (Get-Content $target) -replace '#include\s+"win-stub\.h"', '// #include "win-stub.h"' | Set-Content $target
-      
+
       - name: Configure Mesa build
         working-directory: mesa
         env:
-          # Add WDK include path to INCLUDE for MSVC to find d3d10umddi.h
           INCLUDE: ${{ env.WDK_INCLUDE }};${{ env.INCLUDE }}
         run: |
           mkdir build
@@ -133,7 +132,6 @@ jobs:
 
       - name: Fix Mesa DLL names
         run: |
-          # Sometimes zlib is built as z-1.dll instead of z.dll
           $binPath = "$env:MESA_PREFIX\bin"
           if (-not (Test-Path "$binPath\z.dll")) {
             $zDll = Get-ChildItem "$binPath\z-*.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -149,41 +147,45 @@ jobs:
           git clone ${{ env.DRIVER_REPO }} kvm-guest-drivers-windows
           cd kvm-guest-drivers-windows
           git checkout ${{ env.DRIVER_BRANCH }}
-          git pull
-          git checkout ${{ env.DRIVER_BRANCH }}
+          git submodule update --init --recursive
           cd ..
 
-      - name: Fix DbgPrint macro in driver
+      - name: Configure Driver Build Props and Stub Logging
         shell: pwsh
         run: |
-          $headerPath = "kvm-guest-drivers-windows\viogpu\common\helper.h"
-          if (-not (Test-Path $headerPath)) {
-            $headerPath = "kvm-guest-drivers-windows\viogpu\common\baseobj.h"
-          }
+          # 1. Create a clean stub header in the viogpu directory for DbgPrint
+          $fixHeader = @"
+          #pragma once
+          #include <ntddk.h>
 
-          $dbgFix = @"
-
-          // Workaround for C2664 DbgPrint level mismatch
           #ifdef DbgPrint
           #undef DbgPrint
           #endif
           #define DbgPrint(...) ((ULONG)0)
 
+          #ifdef DbgPrintEx
+          #undef DbgPrintEx
+          #endif
+          #define DbgPrintEx(...) ((ULONG)0)
           "@
+          Set-Content -Path "kvm-guest-drivers-windows\viogpu\dbgfix.h" -Value $fixHeader -Encoding utf8
 
-          Add-Content -Path $headerPath -Value $dbgFix
-          Write-Host "Patched DbgPrint in $headerPath"
-
-      - name: Disable Spectre mitigation requirement
-        shell: pwsh
-        run: |
+          # 2. Inject forced include, disable Spectre, disable warnings-as-errors, and pass MESA_PREFIX_ARM64
           @"
           <Project>
+            <PropertyGroup>
+              <MESA_PREFIX_ARM64>${{ env.MESA_PREFIX }}</MESA_PREFIX_ARM64>
+            </PropertyGroup>
             <ItemDefinitionGroup>
-              <ClCompile><SpectreMitigation>false</SpectreMitigation></ClCompile>
+              <ClCompile>
+                <SpectreMitigation>false</SpectreMitigation>
+                <TreatWarningAsError>false</TreatWarningAsError>
+                <DisableSpecificWarnings>4100;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+                <ForcedIncludeFiles>$(MSBuildThisFileDirectory)dbgfix.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+              </ClCompile>
             </ItemDefinitionGroup>
           </Project>
-          "@ | Set-Content "kvm-guest-drivers-windows\viogpu\Directory.Build.config"
+          "@ | Set-Content "kvm-guest-drivers-windows\viogpu\Directory.Build.props" -Encoding utf8
 
       - name: Patch driver source
         run: |
@@ -195,6 +197,7 @@ jobs:
           MESA_PREFIX_ARM64: ${{ env.MESA_PREFIX }}
         run: |
           ..\build\build.bat viogpu.sln Win10 ARM64
+
       - name: Sign driver files
         working-directory: kvm-guest-drivers-windows/viogpu
         shell: cmd
@@ -203,6 +206,7 @@ jobs:
           copy ..\build\VirtIOTestCert.* .
           copy ..\build\VirtIOTestCert.* build_output/
           copy ..\build\VirtIOTestCert.* kvm-guest-drivers-windows/viogpu/
+
       - name: Collect build artifacts
         run: |
           # Copy Mesa DLLs
@@ -214,16 +218,16 @@ jobs:
             "kvm-guest-drivers-windows\viogpu\viogpu3d\x64",
             "kvm-guest-drivers-windows\viogpu\viogpu3d\Win10Release",
             "kvm-guest-drivers-windows\viogpu\viogpu3d\Win11Release",
+            "kvm-guest-drivers-windows\viogpu\viogpudo\objfre_win10_arm64\arm64",
             "kvm-guest-drivers-windows\Build"
           )
 
-          foreach ($path in $driverPaths) {
+          foreach ($path in$driverPaths) {
             if (Test-Path $path) {
               Copy-Item -Path "$path\*" -Destination "build_output\" -Recurse -Force -ErrorAction SilentlyContinue
             }
           }
 
-          # List collected artifacts
           Write-Host "=== Collected build artifacts ==="
           Get-ChildItem -Path "build_output" -Recurse | Format-Table Name, Length, Directory
 
