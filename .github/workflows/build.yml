@@ -147,42 +147,22 @@ jobs:
           git submodule update --init --recursive
           cd ..
 
-      - name: Configure Driver Build Props and Stub Logging
+      - name: Create DbgPrint Stub Header
         shell: pwsh
         run: |
-          $fixHeader = @'
+          $fixContent = @'
 #pragma once
 #include <ntddk.h>
-
 #ifdef DbgPrint
 #undef DbgPrint
 #endif
 #define DbgPrint(...) ((ULONG)0)
-
 #ifdef DbgPrintEx
 #undef DbgPrintEx
 #endif
 #define DbgPrintEx(...) ((ULONG)0)
 '@
-          Set-Content -Path "kvm-guest-drivers-windows\viogpu\dbgfix.h" -Value $fixHeader -Encoding utf8
-
-          $propsTemplate = @'
-<Project>
-  <PropertyGroup>
-    <MESA_PREFIX_ARM64>__PREFIX__</MESA_PREFIX_ARM64>
-  </PropertyGroup>
-  <ItemDefinitionGroup>
-    <ClCompile>
-      <SpectreMitigation>false</SpectreMitigation>
-      <TreatWarningAsError>false</TreatWarningAsError>
-      <DisableSpecificWarnings>4100;%(DisableSpecificWarnings)</DisableSpecificWarnings>
-      <ForcedIncludeFiles>$(MSBuildThisFileDirectory)dbgfix.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
-    </ClCompile>
-  </ItemDefinitionGroup>
-</Project>
-'@
-          $propsContent = $propsTemplate.Replace("__PREFIX__", $env:MESA_PREFIX)
-          Set-Content -Path "kvm-guest-drivers-windows\viogpu\Directory.Build.props" -Value $propsContent -Encoding utf8
+          Set-Content -Path "kvm-guest-drivers-windows\viogpu\dbgfix.h" -Value $fixContent -Encoding utf8
 
       - name: Patch driver source
         shell: pwsh
@@ -193,10 +173,12 @@ jobs:
 
       - name: Build viogpu driver
         working-directory: kvm-guest-drivers-windows/viogpu
+        shell: cmd
         env:
           MESA_PREFIX_ARM64: ${{ env.MESA_PREFIX }}
         run: |
-          ..\build\build.bat viogpu.sln Win10 ARM64
+          set "EXTRA_FLAGS=/p:SpectreMitigation=false /p:TreatWarningAsError=false /p:DisableSpecificWarnings=4100 /p:ForcedIncludeFiles=%CD%\dbgfix.h /p:MESA_PREFIX_ARM64=%MESA_PREFIX_ARM64%"
+          ..\build\build.bat viogpu.sln Win10 ARM64 %EXTRA_FLAGS%
 
       - name: Sign driver files
         working-directory: kvm-guest-drivers-windows/viogpu
