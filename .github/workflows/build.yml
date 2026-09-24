@@ -17,9 +17,9 @@ on:
         default: '13d74bb75df0a09bd01307b32b0ee0396cdd3279'
 
 env:
-  MESA_REPO: 'https://github.com/AlanoSong/virtio-win-mesa'
+  MESA_REPO: https://github.com/AlanoSong/virtio-win-mesa
   MESA_BRANCH: ${{ github.event.inputs.mesa_branch || '7ad10727e0c547cbd7b1b587700346bdfdc74d8a' }}
-  DRIVER_REPO: 'https://github.com/AlanoSong/kvm-guest-drivers-windows'
+  DRIVER_REPO: https://github.com/AlanoSong/kvm-guest-drivers-windows
   DRIVER_BRANCH: ${{ github.event.inputs.driver_branch || '13d74bb75df0a09bd01307b32b0ee0396cdd3279' }}
 
 jobs:
@@ -150,7 +150,7 @@ jobs:
       - name: Create DbgPrint Stub Header
         shell: pwsh
         run: |
-          $fixContent = @'
+          Set-Content -Path "kvm-guest-drivers-windows\viogpu\dbgfix.h" -Value @"
 #pragma once
 #include <ntddk.h>
 #ifdef DbgPrint
@@ -161,8 +161,27 @@ jobs:
 #undef DbgPrintEx
 #endif
 #define DbgPrintEx(...) ((ULONG)0)
-'@
-          Set-Content -Path "kvm-guest-drivers-windows\viogpu\dbgfix.h" -Value $fixContent -Encoding utf8
+"@ -Encoding utf8
+
+      - name: Configure MSBuild Parameters via Response File
+        shell: pwsh
+        run: |
+          $repoRoot = (Get-Location).Path
+          $mesaDir = Join-Path $repoRoot "mesa_prefix"
+          $dbgHeader = Join-Path $repoRoot "kvm-guest-drivers-windows\viogpu\dbgfix.h"
+
+          $rspLines = @(
+            "/p:SpectreMitigation=false",
+            "/p:TreatWarningAsError=false",
+            "/p:DisableSpecificWarnings=4100",
+            "/p:MESA_PREFIX_ARM64=$mesaDir",
+            "/p:ForcedIncludeFiles=$dbgHeader"
+          )
+
+          $rspPath = "kvm-guest-drivers-windows\viogpu\Directory.Build.rsp"
+          [System.IO.File]::WriteAllLines($rspPath, $rspLines)
+          Write-Host "Generated Directory.Build.rsp:"
+          Get-Content $rspPath
 
       - name: Patch driver source
         shell: pwsh
@@ -174,10 +193,7 @@ jobs:
       - name: Build viogpu driver
         working-directory: kvm-guest-drivers-windows/viogpu
         shell: cmd
-        env:
-          MSBUILDADDITIONALFLAGS: '/p:SpectreMitigation=false /p:TreatWarningAsError=false /p:DisableSpecificWarnings=4100 /p:MESA_PREFIX_ARM64=%GITHUB_WORKSPACE%\mesa_prefix /p:ForcedIncludeFiles=%GITHUB_WORKSPACE%\kvm-guest-drivers-windows\viogpu\dbgfix.h'
-        run: |
-          ..\build\build.bat viogpu.sln Win10 ARM64
+        run: ..\build\build.bat viogpu.sln Win10 ARM64
 
       - name: Sign driver files
         working-directory: kvm-guest-drivers-windows/viogpu
