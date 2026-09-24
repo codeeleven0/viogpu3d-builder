@@ -153,6 +153,27 @@ jobs:
           git checkout ${{ env.DRIVER_BRANCH }}
           cd ..
 
+      - name: Fix DbgPrint macro in driver
+        shell: pwsh
+        run: |
+          $headerPath = "kvm-guest-drivers-windows\viogpu\common\helper.h"
+          if (-not (Test-Path $headerPath)) {
+            $headerPath = "kvm-guest-drivers-windows\viogpu\common\baseobj.h"
+          }
+
+          $dbgFix = @"
+
+          // Workaround for C2664 DbgPrint level mismatch
+          #ifdef DbgPrint
+          #undef DbgPrint
+          #endif
+          #define DbgPrint(level, ...) DbgPrintEx(DPFLTR_DEFAULT_ID, DPFLTR_ERROR_LEVEL, __VA_ARGS__)
+
+          "@
+
+          Add-Content -Path $headerPath -Value $dbgFix
+          Write-Host "Patched DbgPrint in $headerPath"
+
       - name: Disable Spectre mitigation requirement
         shell: pwsh
         run: |
