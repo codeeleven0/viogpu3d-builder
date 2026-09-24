@@ -17,9 +17,9 @@ on:
         default: '13d74bb75df0a09bd01307b32b0ee0396cdd3279'
 
 env:
-  MESA_REPO: https://github.com/AlanoSong/virtio-win-mesa
+  MESA_REPO: 'https://github.com/AlanoSong/virtio-win-mesa'
   MESA_BRANCH: ${{ github.event.inputs.mesa_branch || '7ad10727e0c547cbd7b1b587700346bdfdc74d8a' }}
-  DRIVER_REPO: https://github.com/AlanoSong/kvm-guest-drivers-windows
+  DRIVER_REPO: 'https://github.com/AlanoSong/kvm-guest-drivers-windows'
   DRIVER_BRANCH: ${{ github.event.inputs.driver_branch || '13d74bb75df0a09bd01307b32b0ee0396cdd3279' }}
 
 jobs:
@@ -150,65 +150,42 @@ jobs:
       - name: Eradicate DbgPrint Calls in Source
         shell: pwsh
         run: |
-          $files = Get-ChildItem -Path "kvm-guest-drivers-windows\viogpu" -Recurse -File | Where-Object { $_.Extension -match '\.(cpp\vert{}c\vert{}h)$' }
+          # This physically replaces all calls to DbgPrint and DbgPrintEx with the compiler 
+          # intrinsic __noop, which safely consumes and ignores all arguments of any type.
+          $files = Get-ChildItem -Path "kvm-guest-drivers-windows\viogpu" -Recurse -Include *.cpp,*.c,*.h
           foreach ($f in$files) {
-              $txt = [System.IO.File]::ReadAllText($f.FullName)
-              if ($txt -match 'DbgPrint') {
-                  $lines =$txt -split "`r`n"
-                  for ($i = 0; $i -lt $lines.Count; $i++) {
-                      if ($lines[$i] -notmatch '^\s*#\s*(define|undef)') {
-                          $lines[$i] = $lines[$i] -replace '\bDbgPrintEx?\s*\(', '__noop('
-                      }
-                  }
-                  [System.IO.File]::WriteAllLines($f.FullName, $lines)
+              $txt = Get-Content$f.FullName -Raw
+              if ($txt -match '\bDbgPrint') {
+                  $txt =$txt -creplace '\bDbgPrint\s*\(', '__noop('
+                  $txt =$txt -creplace '\bDbgPrintEx\s*\(', '__noop('
+                  Set-Content -Path $f.FullName -Value$txt
               }
           }
-
-      - name: Configure Driver Build Properties
-        shell: pwsh
-        run: |
-          $repoRoot = (Get-Location).Path
-          $mesaDir = Join-Path$repoRoot "mesa_prefix"
-
-          $propsLines = @(
-            '<Project>',
-            '  <PropertyGroup>',
-            "    <MESA_PREFIX_ARM64>$mesaDir</MESA_PREFIX_ARM64>",
-            '  </PropertyGroup>',
-            '  <ItemDefinitionGroup>',
-            '    <ClCompile>',
-            '      <SpectreMitigation>false</SpectreMitigation>',
-            '      <TreatWarningAsError>false</TreatWarningAsError>',
-            '      <DisableSpecificWarnings>4100;2220;%(DisableSpecificWarnings)</DisableSpecificWarnings>',
-            '    </ClCompile>',
-            '  </ItemDefinitionGroup>',
-            '</Project>'
-          )
-          $propsPath = "kvm-guest-drivers-windows\viogpu\Directory.Build.props"
-          [System.IO.File]::WriteAllLines($propsPath,$propsLines)
-          Write-Host "Generated Directory.Build.props:"
-          Get-Content $propsPath
 
       - name: Patch driver source
         shell: pwsh
         run: |
-          if (Test-Path ".\scripts\patch-driver.ps1") {
-            .\scripts\patch-driver.ps1 -DriverPath kvm-guest-drivers-windows
+          if (Test-Path ".\kvm-guest-drivers-windows\scripts\patch-driver.ps1") {
+            .\kvm-guest-drivers-windows\scripts\patch-driver.ps1 -DriverPath kvm-guest-drivers-windows
           }
 
       - name: Build viogpu driver
         working-directory: kvm-guest-drivers-windows/viogpu
-        shell: cmd
-        run: ..\build\build.bat viogpu.sln Win10 ARM64
+        shell: pwsh
+        run: |
+          # Set MSBuild flags natively in the PowerShell environment before execution.
+          # This bypasses YAML string escaping bugs and .props file overrides.
+          $env:MSBUILDADDITIONALFLAGS = "/p:SpectreMitigation=false /p:TreatWarningAsError=false /p:MESA_PREFIX_ARM64=`"$env:MESA_PREFIX`""
+          
+          # Force execution through a native cmd environment so build.bat runs smoothly
+          cmd.exe /c "..\build\build.bat viogpu.sln Win10 ARM64"
 
       - name: Sign driver files
         working-directory: kvm-guest-drivers-windows/viogpu
         shell: cmd
         run: |
           ..\build\signAll.bat
-          copy ..\build\VirtIOTestCert.* .
-          copy ..\build\VirtIOTestCert.* build_output\
-          copy ..\build\VirtIOTestCert.* kvm-guest-drivers-windows\viogpu\
+          copy ..\build\VirtIOTestCert.* "%GITHUB_WORKSPACE%\build_output\"
 
       - name: Collect build artifacts
         shell: pwsh
@@ -217,6 +194,8 @@ jobs:
           Copy-Item -Path "$env:MESA_PREFIX\lib\*.dll" -Destination "build_output\" -Force -ErrorAction SilentlyContinue
 
           $driverPaths = @(
+            "kvm-guest-drivers-windows\viogpu\viogpu3d\arm64",
+            "kvm-guest-drivers-windows\viogpu\viogpu3d\ARM64Release",
             "kvm-guest-drivers-windows\viogpu\viogpu3d\x64",
             "kvm-guest-drivers-windows\viogpu\viogpu3d\Win10Release",
             "kvm-guest-drivers-windows\viogpu\viogpu3d\Win11Release",
@@ -247,12 +226,4 @@ jobs:
         with:
           name: viogpu3d-driver
           path: build_output/
-          if-no-files-found: warn
-
-      - name: Upload full build output
-        uses: actions/upload-artifact@v4
-        with:
-          name: full-build
-          path: |
-            kvm-guest-drivers-windows/viogpu/
           if-no-files-found: warn
