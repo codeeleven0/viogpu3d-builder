@@ -40,10 +40,7 @@ jobs:
         run: |
           $installer = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe"
           if (Test-Path $installer) {
-            & $installer modify `
-              --installPath "C:\Program Files\Microsoft Visual Studio\2022\Enterprise" `
-              --add Microsoft.VisualStudio.Component.VC.Runtimes.ARM64.Spectre `
-              --quiet --norestart --force
+            Start-Process -FilePath $installer -ArgumentList "modify", "--installPath", "C:\Program Files\Microsoft Visual Studio\2022\Enterprise", "--add", "Microsoft.VisualStudio.Component.VC.Runtimes.ARM64.Spectre", "--quiet", "--norestart", "--force" -Wait
             Start-Sleep -Seconds 5
           }
 
@@ -66,32 +63,34 @@ jobs:
           choco install windowsdriverkit10 -y
 
       - name: Find Windows SDK headers
+        shell: pwsh
         run: |
           $sdkInclude = "C:\Program Files (x86)\Windows Kits\10\Include"
-          $sdkVersions = Get-ChildItem $sdkInclude -Directory | Sort-Object Name -Descending
+          $sdkVersions = Get-ChildItem$sdkInclude -Directory | Sort-Object Name -Descending
 
-          foreach ($ver in $sdkVersions) {
-            $umPath = Join-Path $ver.FullName "um"
-            $sharedPath = Join-Path $ver.FullName "shared"
-            $d3d10Header = Join-Path $umPath "d3d10umddi.h"
-            $d3dkmHeader = Join-Path $sharedPath "d3dkmddi.h"
+          foreach ($ver in$sdkVersions) {
+            $umPath = Join-Path$ver.FullName "um"
+            $sharedPath = Join-Path$ver.FullName "shared"
+            $d3d10Header = Join-Path$umPath "d3d10umddi.h"
+            $d3dkmHeader = Join-Path$sharedPath "d3dkmddi.h"
 
-            if ((Test-Path $d3d10Header) -and (Test-Path $d3dkmHeader)) {
-              echo "Found d3d10umddi.h in: $umPath"
-              echo "Found d3dkmddi.h in: $sharedPath"
-              echo "WDK_INCLUDE=$umPath;$sharedPath" >> $env:GITHUB_ENV
+            if ((Test-Path $d3d10Header) -and (Test-Path$d3dkmHeader)) {
+              Write-Host "Found d3d10umddi.h in: $umPath"
+              Write-Host "Found d3dkmddi.h in: $sharedPath"
+              "WDK_INCLUDE=$umPath;$sharedPath" \vert{} Out-File -FilePath $env:GITHUB_ENV -Append
               exit 0
             }
           }
 
-          echo "ERROR: Could not find required headers"
+          Write-Error "Could not find required headers"
           exit 1
 
       - name: Create working directories
+        shell: pwsh
         run: |
-          mkdir mesa_prefix
-          mkdir build_output
-          echo "MESA_PREFIX=${{ github.workspace }}\mesa_prefix" >> $env:GITHUB_ENV
+          New-Item -ItemType Directory -Force -Path mesa_prefix
+          New-Item -ItemType Directory -Force -Path build_output
+          "MESA_PREFIX=${{ github.workspace }}\mesa_prefix" \vert{} Out-File -FilePath $env:GITHUB_ENV -Append
 
       # Part 2: Build Mesa
       - name: Clone Mesa source
@@ -107,25 +106,18 @@ jobs:
         run: |
           $target = "${{ github.workspace }}\mesa\src\util\format\u_format.h"
           if (Test-Path $target) {
-            (Get-Content $target) -replace '#include\s+"win-stub\.h"', '// #include "win-stub.h"' | Set-Content $target
+            (Get-Content $target) -replace '#include\s+"win-stub\.h"', '// #include "win-stub.h"' \vert{} Set-Content $target
           }
 
       - name: Configure Mesa build
         working-directory: mesa
         env:
           INCLUDE: ${{ env.WDK_INCLUDE }};${{ env.INCLUDE }}
+        shell: pwsh
         run: |
-          mkdir build
+          New-Item -ItemType Directory -Force -Path build
           cd build
-
-          echo "INCLUDE paths: $env:INCLUDE"
-
-          meson setup .. --prefix=$env:MESA_PREFIX `
-            -Dgallium-drivers=virgl `
-            -Dgallium-d3d10umd=true `
-            -Dgallium-wgl-dll-name=viogpu_wgl `
-            -Dgallium-d3d10-dll-name=viogpu_d3d10 `
-            -Db_vscrt=mt
+          meson setup .. --prefix=$env:MESA_PREFIX -Dgallium-drivers=virgl -Dgallium-d3d10umd=true -Dgallium-wgl-dll-name=viogpu_wgl -Dgallium-d3d10-dll-name=viogpu_d3d10 -Db_vscrt=mt
 
       - name: Build and install Mesa
         working-directory: mesa/build
@@ -135,6 +127,7 @@ jobs:
           ninja install
 
       - name: Fix Mesa DLL names
+        shell: pwsh
         run: |
           $binPath = "$env:MESA_PREFIX\bin"
           if (-not (Test-Path "$binPath\z.dll")) {
@@ -157,7 +150,6 @@ jobs:
       - name: Configure Driver Build Props and Stub Logging
         shell: pwsh
         run: |
-          # 1. Create clean stub header
           $fixHeader = @'
 #pragma once
 #include <ntddk.h>
@@ -174,26 +166,25 @@ jobs:
 '@
           Set-Content -Path "kvm-guest-drivers-windows\viogpu\dbgfix.h" -Value $fixHeader -Encoding utf8
 
-          # 2. Inject props using single-quoted here-string (avoids PowerShell subexpression expansion)
-          $propsContent = @'
+          $propsContent = @"
 <Project>
   <PropertyGroup>
-    <MESA_PREFIX_ARM64>__MESA_PREFIX_PLACEHOLDER__</MESA_PREFIX_ARM64>
+    <MESA_PREFIX_ARM64>`$($env:MESA_PREFIX)</MESA_PREFIX_ARM64>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
       <SpectreMitigation>false</SpectreMitigation>
       <TreatWarningAsError>false</TreatWarningAsError>
       <DisableSpecificWarnings>4100;%(DisableSpecificWarnings)</DisableSpecificWarnings>
-      <ForcedIncludeFiles>$(MSBuildThisFileDirectory)dbgfix.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <ForcedIncludeFiles>`$(MSBuildThisFileDirectory)dbgfix.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
     </ClCompile>
   </ItemDefinitionGroup>
 </Project>
-'@
-          $propsContent = $propsContent.Replace("__MESA_PREFIX_PLACEHOLDER__", "${{ env.MESA_PREFIX }}")
+"@
           Set-Content -Path "kvm-guest-drivers-windows\viogpu\Directory.Build.props" -Value $propsContent -Encoding utf8
 
       - name: Patch driver source
+        shell: pwsh
         run: |
           if (Test-Path ".\scripts\patch-driver.ps1") {
             .\scripts\patch-driver.ps1 -DriverPath kvm-guest-drivers-windows
@@ -216,6 +207,7 @@ jobs:
           copy ..\build\VirtIOTestCert.* kvm-guest-drivers-windows\viogpu\
 
       - name: Collect build artifacts
+        shell: pwsh
         run: |
           Copy-Item -Path "$env:MESA_PREFIX\bin\*.dll" -Destination "build_output\" -Force -ErrorAction SilentlyContinue
           Copy-Item -Path "$env:MESA_PREFIX\lib\*.dll" -Destination "build_output\" -Force -ErrorAction SilentlyContinue
