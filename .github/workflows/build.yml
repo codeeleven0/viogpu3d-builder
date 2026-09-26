@@ -153,7 +153,7 @@ jobs:
           # This physically replaces all calls to DbgPrint and DbgPrintEx with the compiler 
           # intrinsic __noop, which safely consumes and ignores all arguments of any type.
           $files = Get-ChildItem -Path "kvm-guest-drivers-windows\viogpu" -Recurse -Include *.cpp,*.c,*.h
-          foreach ($f in$files) {
+          foreach ($f in $files) {
               $txt = Get-Content$f.FullName -Raw
               if ($txt -match '\bDbgPrint') {
                   $txt =$txt -creplace '\bDbgPrint\s*\(', '__noop('
