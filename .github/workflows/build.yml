@@ -90,7 +90,8 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path mesa_prefix
           New-Item -ItemType Directory -Force -Path build_output
-          "MESA_PREFIX=$PWD\mesa_prefix" \vert{} Out-File -FilePath $env:GITHUB_ENV -Append
+          $prefix = (Resolve-Path "mesa_prefix").Path
+          "MESA_PREFIX=$prefix" \vert{} Out-File -FilePath $env:GITHUB_ENV -Append
 
       # Part 2: Build Mesa
       - name: Clone Mesa source
@@ -150,16 +151,14 @@ jobs:
       - name: Eradicate DbgPrint Calls in Source
         shell: pwsh
         run: |
-          # This physically replaces all calls to DbgPrint and DbgPrintEx with the compiler 
-          # intrinsic __noop, which safely consumes and ignores all arguments of any type.
           $files = Get-ChildItem -Path "kvm-guest-drivers-windows\viogpu" -Recurse -Include *.cpp,*.c,*.h
-          foreach ($f in $files) {
-              $txt = Get-Content$f.FullName -Raw
-              if ($txt -match '\bDbgPrint') {
-                  $txt =$txt -creplace '\bDbgPrint\s*\(', '__noop('
-                  $txt =$txt -creplace '\bDbgPrintEx\s*\(', '__noop('
-                  Set-Content -Path $f.FullName -Value$txt
-              }
+          foreach ($f in$files) {
+            $txt = Get-Content$f.FullName -Raw
+            if ($txt -match '\bDbgPrint') {
+              $txt =$txt -creplace '\bDbgPrint\s*\(', '__noop('
+              $txt =$txt -creplace '\bDbgPrintEx\s*\(', '__noop('
+              Set-Content -Path $f.FullName -Value$txt
+            }
           }
 
       - name: Patch driver source
@@ -173,11 +172,7 @@ jobs:
         working-directory: kvm-guest-drivers-windows/viogpu
         shell: pwsh
         run: |
-          # Set MSBuild flags natively in the PowerShell environment before execution.
-          # This bypasses YAML string escaping bugs and .props file overrides.
           $env:MSBUILDADDITIONALFLAGS = "/p:SpectreMitigation=false /p:TreatWarningAsError=false /p:MESA_PREFIX_ARM64=`"$env:MESA_PREFIX`""
-          
-          # Force execution through a native cmd environment so build.bat runs smoothly
           cmd.exe /c "..\build\build.bat viogpu.sln Win10 ARM64"
 
       - name: Sign driver files
