@@ -188,20 +188,34 @@ jobs:
           Copy-Item -Path "$env:MESA_PREFIX\bin\*.dll" -Destination "build_output\" -Force -ErrorAction SilentlyContinue
           Copy-Item -Path "$env:MESA_PREFIX\lib\*.dll" -Destination "build_output\" -Force -ErrorAction SilentlyContinue
 
-          $driverPaths = @(
-            "kvm-guest-drivers-windows\viogpu\viogpu3d\arm64",
-            "kvm-guest-drivers-windows\viogpu\viogpu3d\ARM64Release",
-            "kvm-guest-drivers-windows\viogpu\viogpu3d\x64",
-            "kvm-guest-drivers-windows\viogpu\viogpu3d\Win10Release",
-            "kvm-guest-drivers-windows\viogpu\viogpu3d\Win11Release",
-            "kvm-guest-drivers-windows\viogpu\viogpudo\objfre_win10_arm64\arm64",
+          $driverSearchRoots = @(
+            "kvm-guest-drivers-windows\viogpu",
             "kvm-guest-drivers-windows\Build"
           )
 
-          foreach ($path in $driverPaths) {
-            if (Test-Path $path) {
-              Copy-Item -Path "$path\*" -Destination "build_output\" -Recurse -Force -ErrorAction SilentlyContinue
+          $driverFilePatterns = @(
+            "*.inf",
+            "*.cat",
+            "*.sys",
+            "*.dll",
+            "*.pdb",
+            "*.exe"
+          )
+
+          foreach ($root in $driverSearchRoots) {
+            if (Test-Path $root) {
+              foreach ($pattern in $driverFilePatterns) {
+                Get-ChildItem -Path $root -Filter $pattern -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object {
+                  Copy-Item -Path $_.FullName -Destination "build_output\" -Force -ErrorAction SilentlyContinue
+                }
+              }
             }
+          }
+
+          $driverPackageFiles = Get-ChildItem -Path "build_output" -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Extension -in ".inf", ".cat", ".sys" }
+          if (-not $driverPackageFiles) {
+            Write-Warning "No driver package files (.inf/.cat/.sys) were collected into build_output."
           }
 
           Write-Host "=== Collected build artifacts ==="
