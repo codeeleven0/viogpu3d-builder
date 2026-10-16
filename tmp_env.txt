@@ -1,1 +1,0 @@
-WDK_INCLUDE=/home/runner/work/viogpu3d-builder/viogpu3d-builder/tmp_sdk/10.0.1/um;/home/runner/work/viogpu3d-builder/viogpu3d-builder/tmp_sdk/10.0.1/shared
