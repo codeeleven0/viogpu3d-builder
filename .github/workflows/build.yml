@@ -63,6 +63,31 @@ jobs:
         run: |
           choco install windowsdriverkit10 -y
 
+      - name: Repair WDK MSBuild task path
+        shell: pwsh
+        run: |
+          $buildRoot = "C:\Program Files (x86)\Windows Kits\10\build"
+          $sdkDirs = Get-ChildItem $buildRoot -Directory -ErrorAction SilentlyContinue | Sort-Object Name -Descending
+
+          foreach ($sdkDir in $sdkDirs) {
+            $binRoot = Join-Path $sdkDir.FullName "bin"
+            $targetTask = Join-Path $binRoot "Microsoft.DriverKit.Build.Tasks.18.0.dll"
+            if (Test-Path $targetTask) {
+              Write-Host "WDK task already present: $targetTask"
+              break
+            }
+
+            $candidateTask = Get-ChildItem -Path $binRoot -Recurse -Filter "Microsoft.DriverKit.Build.Tasks.18.0.dll" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($candidateTask) {
+              Write-Host "Repairing WDK task path using: $($candidateTask.FullName)"
+              Copy-Item -Path (Join-Path $candidateTask.Directory.FullName "*") -Destination $binRoot -Force -ErrorAction SilentlyContinue
+              if (Test-Path $targetTask) {
+                Write-Host "Repaired WDK task path: $targetTask"
+                break
+              }
+            }
+          }
+
       - name: Find Windows SDK headers
         shell: pwsh
         run: |
@@ -176,6 +201,28 @@ jobs:
           $env:MSBUILDADDITIONALFLAGS = "/p:SpectreMitigation=false /p:TreatWarningAsError=false /p:MESA_PREFIX_ARM64=`"$env:MESA_PREFIX`""
           cmd.exe /c "..\build\build.bat viogpu.sln Win10 ARM64"
 
+      - name: Verify driver package outputs
+        shell: pwsh
+        run: |
+          $driverRoots = @(
+            "kvm-guest-drivers-windows\viogpu",
+            "kvm-guest-drivers-windows\Build"
+          )
+
+          $driverPackageFiles = foreach ($root in $driverRoots) {
+            if (Test-Path $root) {
+              Get-ChildItem -Path $root -Recurse -File -Include *.inf,*.cat,*.sys -ErrorAction SilentlyContinue
+            }
+          }
+
+          if (-not $driverPackageFiles) {
+            Write-Error "No driver package files (.inf/.cat/.sys) were produced by the build."
+            exit 1
+          }
+
+          Write-Host "Driver package files found:"
+          $driverPackageFiles | Select-Object -ExpandProperty FullName
+
       - name: Sign driver files
         working-directory: kvm-guest-drivers-windows/viogpu
         shell: cmd
@@ -216,7 +263,8 @@ jobs:
           $driverPackageFiles = Get-ChildItem -Path "build_output" -File -ErrorAction SilentlyContinue |
             Where-Object { $_.Extension -in ".inf", ".cat", ".sys" }
           if (-not $driverPackageFiles) {
-            Write-Warning "No driver package files (.inf/.cat/.sys) were collected into build_output."
+            Write-Error "No driver package files (.inf/.cat/.sys) were collected into build_output."
+            exit 1
           }
 
           Write-Host "=== Collected build artifacts ==="
