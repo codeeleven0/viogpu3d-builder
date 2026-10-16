@@ -66,18 +66,18 @@ jobs:
         shell: pwsh
         run: |
           $sdkInclude = "C:\Program Files (x86)\Windows Kits\10\Include"
-          $sdkVersions = Get-ChildItem$sdkInclude -Directory | Sort-Object Name -Descending
+          $sdkVersions = Get-ChildItem $sdkInclude -Directory | Sort-Object Name -Descending
 
-          foreach ($ver in$sdkVersions) {
-            $umPath = Join-Path$ver.FullName "um"
-            $sharedPath = Join-Path$ver.FullName "shared"
-            $d3d10Header = Join-Path$umPath "d3d10umddi.h"
-            $d3dkmHeader = Join-Path$sharedPath "d3dkmddi.h"
+          foreach ($ver in $sdkVersions) {
+            $umPath = Join-Path $ver.FullName "um"
+            $sharedPath = Join-Path $ver.FullName "shared"
+            $d3d10Header = Join-Path $umPath "d3d10umddi.h"
+            $d3dkmHeader = Join-Path $sharedPath "d3dkmddi.h"
 
-            if ((Test-Path $d3d10Header) -and (Test-Path$d3dkmHeader)) {
+            if ((Test-Path $d3d10Header) -and (Test-Path $d3dkmHeader)) {
               Write-Host "Found d3d10umddi.h in: $umPath"
               Write-Host "Found d3dkmddi.h in: $sharedPath"
-              "WDK_INCLUDE=$umPath;$sharedPath" \vert{} Out-File -FilePath $env:GITHUB_ENV -Append
+              "WDK_INCLUDE=$umPath;$sharedPath" | Out-File -FilePath $env:GITHUB_ENV -Append
               exit 0
             }
           }
@@ -91,7 +91,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path mesa_prefix
           New-Item -ItemType Directory -Force -Path build_output
           $prefix = (Resolve-Path "mesa_prefix").Path
-          "MESA_PREFIX=$prefix" \vert{} Out-File -FilePath $env:GITHUB_ENV -Append
+          "MESA_PREFIX=$prefix" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       # Part 2: Build Mesa
       - name: Clone Mesa source
@@ -107,7 +107,7 @@ jobs:
         run: |
           $target = "mesa\src\util\format\u_format.h"
           if (Test-Path $target) {
-            (Get-Content $target) -replace '#include\s+"win-stub\.h"', '// #include "win-stub.h"' \vert{} Set-Content $target
+            (Get-Content $target) -replace '#include\s+"win-stub\.h"', '// #include "win-stub.h"' | Set-Content $target
           }
 
       - name: Configure Mesa build
@@ -152,12 +152,12 @@ jobs:
         shell: pwsh
         run: |
           $files = Get-ChildItem -Path "kvm-guest-drivers-windows\viogpu" -Recurse -Include *.cpp,*.c,*.h
-          foreach ($f in$files) {
-            $txt = Get-Content$f.FullName -Raw
+          foreach ($f in $files) {
+            $txt = Get-Content $f.FullName -Raw
             if ($txt -match '\bDbgPrint') {
               $txt =$txt -creplace '\bDbgPrint\s*\(', '__noop('
               $txt =$txt -creplace '\bDbgPrintEx\s*\(', '__noop('
-              Set-Content -Path $f.FullName -Value$txt
+              Set-Content -Path $f.FullName -Value $txt
             }
           }
 
@@ -198,7 +198,7 @@ jobs:
             "kvm-guest-drivers-windows\Build"
           )
 
-          foreach ($path in$driverPaths) {
+          foreach ($path in $driverPaths) {
             if (Test-Path $path) {
               Copy-Item -Path "$path\*" -Destination "build_output\" -Recurse -Force -ErrorAction SilentlyContinue
             }
